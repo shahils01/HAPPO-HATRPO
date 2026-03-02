@@ -1,31 +1,31 @@
 #!/bin/sh
 env="mujoco"
-scenario="HalfCheetah-v5"
-agent_conf="6x1"
+scenario="ManyAgentGoToGoalEnv-v0"
+num_agents=15
 agent_obsk=0
 algo="happo"
 exp="mlp"
-running_max=20
+running_max=5
 kl_threshold=1e-4
 echo "env is ${env}, scenario is ${scenario}, algo is ${algo}, exp is ${exp}, max seed is ${seed_max}"
 for number in `seq ${running_max}`;
 do
     echo "the ${number}-th running:"
-    CUDA_VISIBLE_DEVICES=1 python train/train_mujoco.py \
+    CUDA_VISIBLE_DEVICES=1 python train/train_manygotogoal.py \
         --env_name ${env} \
         --algorithm_name ${algo} \
         --experiment_name ${exp} \
         --scenario ${scenario} \
-        --agent_conf ${agent_conf} \
+        --num_agents ${num_agents} \
         --agent_obsk ${agent_obsk} \
-        --lr 5e-5 \
-        --critic_lr 5e-5 \
+        --lr 4e-5 \
+        --critic_lr 4e-5 \
         --clip_param 0.2 \
         --std_x_coef 1 \
         --std_y_coef 5e-1 \
         --running_id ${number} \
         --n_training_threads 32 \
-        --n_rollout_threads 40 \
+        --n_rollout_threads 32 \
         --num_mini_batch 1 \
         --episode_length 200 \
         --num_env_steps 200000000 \

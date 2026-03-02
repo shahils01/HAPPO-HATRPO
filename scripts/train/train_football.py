@@ -1,31 +1,33 @@
 #!/usr/bin/env python
 import sys
 import os
-import wandb
 sys.path.append("../")
 import socket
 import setproctitle
 import numpy as np
 from pathlib import Path
 import torch
+import wandb
 from configs.config import get_config
-from envs.ma_mujoco.multiagent_mujoco.mujoco_multi import MujocoMulti
+from envs.football.football_env import FootballEnv
+from runners.separated.football_runner import FootballRunner as Runner
 from envs.env_wrappers import ShareSubprocVecEnv, ShareDummyVecEnv
-from runners.separated.mujoco_runner import MujocoRunner as Runner
-"""Train script for Mujoco."""
+
+
+"""Train script for GFootball."""
 
 
 def make_train_env(all_args):
     def get_env_fn(rank):
         def init_env():
-            if all_args.env_name == "mujoco":
+            if all_args.env_name == "football":
                 env_args = {"scenario": all_args.scenario,
-                            "agent_conf": all_args.agent_conf,
-                            "agent_obsk": all_args.agent_obsk,
-                            "episode_limit": 1000}
-                env = MujocoMulti(env_args=env_args)
+                            "n_agent": all_args.n_agent,
+                            "reward": "scoring"}
+
+                env = FootballEnv(env_args=env_args)
             else:
-                print("Can not support the " + all_args.env_name + "environment.")
+                print("Can not support the " + all_args.env_name + " environment.")
                 raise NotImplementedError
             env.seed(all_args.seed + rank * 1000)
             return env
@@ -41,14 +43,13 @@ def make_train_env(all_args):
 def make_eval_env(all_args):
     def get_env_fn(rank):
         def init_env():
-            if all_args.env_name == "mujoco":
+            if all_args.env_name == "football":
                 env_args = {"scenario": all_args.scenario,
-                            "agent_conf": all_args.agent_conf,
-                            "agent_obsk": all_args.agent_obsk,
-                            "episode_limit": 1000}
-                env = MujocoMulti(env_args=env_args)
+                            "n_agent": all_args.n_agent,
+                            "reward": "scoring"}
+                env = FootballEnv(env_args=env_args)
             else:
-                print("Can not support the " + all_args.env_name + "environment.")
+                print("Can not support the " + all_args.env_name + " environment.")
                 raise NotImplementedError
             env.seed(all_args.seed * 50000 + rank * 10000)
             return env
@@ -58,13 +59,12 @@ def make_eval_env(all_args):
     if all_args.n_eval_rollout_threads == 1:
         return ShareDummyVecEnv([get_env_fn(0)])
     else:
-        return ShareSubprocVecEnv([get_env_fn(i) for i in range(all_args.n_eval_rollout_threads)])
+        return ShareSubprocVecEnv([get_env_fn(i) for i in range(all_args.eval_episodes)])
 
 
 def parse_args(args, parser):
-    parser.add_argument('--scenario', type=str, default='Hopper-v2', help="Which mujoco task to run on")
-    parser.add_argument('--agent_conf', type=str, default='3x1')
-    parser.add_argument('--agent_obsk', type=int, default=0)
+    parser.add_argument('--scenario', type=str, default='academy_3_vs_1_with_keeper')
+    parser.add_argument('--n_agent', type=int, default=3)
     parser.add_argument("--add_move_state", action='store_true', default=False)
     parser.add_argument("--add_local_obs", action='store_true', default=False)
     parser.add_argument("--add_distance_state", action='store_true', default=False)
@@ -72,13 +72,10 @@ def parse_args(args, parser):
     parser.add_argument("--add_agent_id", action='store_true', default=False)
     parser.add_argument("--add_visible_state", action='store_true', default=False)
     parser.add_argument("--add_xy_state", action='store_true', default=False)
-
-    # agent-specific state should be designed carefully
     parser.add_argument("--use_state_agent", action='store_true', default=False)
     parser.add_argument("--use_mustalive", action='store_false', default=True)
     parser.add_argument("--add_center_xy", action='store_true', default=False)
     parser.add_argument("--use_single_network", action='store_true', default=False)
-
     all_args = parser.parse_known_args(args)[0]
 
     return all_args
@@ -94,7 +91,7 @@ def main(args):
         all_args.seed=np.random.randint(1000,10000)
     print("seed is :",all_args.seed)
     # cuda
-    if all_args.cuda: # and torch.cuda.is_available():
+    if all_args.cuda and torch.cuda.is_available():
         print("choose to use gpu...")
         device = torch.device("cuda:0")
         torch.set_num_threads(all_args.n_training_threads)
@@ -108,22 +105,24 @@ def main(args):
 
     run_dir = Path(os.path.split(os.path.dirname(os.path.abspath(__file__)))[
                        0] + "/results") / all_args.env_name / all_args.scenario / all_args.algorithm_name / all_args.experiment_name / str(all_args.seed)
-    if not run_dir.exists():
-        os.makedirs(str(run_dir))
-
+    
     if all_args.use_wandb:
+        wandb_project = all_args.scenario
         run = wandb.init(config=all_args,
-                         project=all_args.env_name,
+                         project=wandb_project,
                          entity=all_args.user_name,
                          notes=socket.gethostname(),
                          name=str(all_args.algorithm_name) + "_" +
-                              str(all_args.experiment_name) +
+                              "ablation" +
                               "_seed" + str(all_args.seed),
-                         group=all_args.env_name,
+                         group=all_args.scenario,
                          dir=str(run_dir),
                          job_type="training",
                          reinit=True)
     else:
+        if not run_dir.exists():
+            os.makedirs(str(run_dir))
+
         if not run_dir.exists():
             curr_run = 'run1'
         else:
@@ -159,7 +158,6 @@ def main(args):
         "device": device,
         "run_dir": run_dir
     }
-
     # run experiments
     runner = Runner(config)
     runner.run()
@@ -168,10 +166,10 @@ def main(args):
     envs.close()
     if all_args.use_eval and eval_envs is not envs:
         eval_envs.close()
-
     runner.writter.export_scalars_to_json(str(runner.log_dir + '/summary.json'))
     runner.writter.close()
 
 
 if __name__ == "__main__":
+    
     main(sys.argv[1:])

@@ -8,6 +8,8 @@ import setproctitle
 import numpy as np
 from pathlib import Path
 import torch
+import ManyAgent_GoTOGoal
+import gymnasium as gym
 from configs.config import get_config
 from envs.ma_mujoco.multiagent_mujoco.mujoco_multi import MujocoMulti
 from envs.env_wrappers import ShareSubprocVecEnv, ShareDummyVecEnv
@@ -19,11 +21,8 @@ def make_train_env(all_args):
     def get_env_fn(rank):
         def init_env():
             if all_args.env_name == "mujoco":
-                env_args = {"scenario": all_args.scenario,
-                            "agent_conf": all_args.agent_conf,
-                            "agent_obsk": all_args.agent_obsk,
-                            "episode_limit": 1000}
-                env = MujocoMulti(env_args=env_args)
+                scenario = normalize_scenario(all_args.scenario)
+                env = gym.make(scenario, disable_env_checker=True)
             else:
                 print("Can not support the " + all_args.env_name + "environment.")
                 raise NotImplementedError
@@ -42,11 +41,8 @@ def make_eval_env(all_args):
     def get_env_fn(rank):
         def init_env():
             if all_args.env_name == "mujoco":
-                env_args = {"scenario": all_args.scenario,
-                            "agent_conf": all_args.agent_conf,
-                            "agent_obsk": all_args.agent_obsk,
-                            "episode_limit": 1000}
-                env = MujocoMulti(env_args=env_args)
+                scenario = normalize_scenario(all_args.scenario)
+                env = gym.make(scenario, disable_env_checker=True)
             else:
                 print("Can not support the " + all_args.env_name + "environment.")
                 raise NotImplementedError
@@ -61,9 +57,18 @@ def make_eval_env(all_args):
         return ShareSubprocVecEnv([get_env_fn(i) for i in range(all_args.n_eval_rollout_threads)])
 
 
+def normalize_scenario(scenario):
+    aliases = {
+        "ManyAgentGoToGoalEnv": "ManyAgentGoToGoal-v0",
+        "ManyAgentGoToGoalEnv-v0": "ManyAgentGoToGoal-v0",
+        "ManyAgentGoToGoal": "ManyAgentGoToGoal-v0",
+    }
+    return aliases.get(scenario, scenario)
+
+
 def parse_args(args, parser):
-    parser.add_argument('--scenario', type=str, default='Hopper-v2', help="Which mujoco task to run on")
-    parser.add_argument('--agent_conf', type=str, default='3x1')
+    parser.add_argument('--scenario', type=str, default='ManyAgentGoToGoal-v0', help="Which mujoco task to run on")
+    parser.add_argument('--num_agents', type=str, default='5')
     parser.add_argument('--agent_obsk', type=int, default=0)
     parser.add_argument("--add_move_state", action='store_true', default=False)
     parser.add_argument("--add_local_obs", action='store_true', default=False)
@@ -113,7 +118,7 @@ def main(args):
 
     if all_args.use_wandb:
         run = wandb.init(config=all_args,
-                         project=all_args.env_name,
+                         project="IROS_" + all_args.scenario,
                          entity=all_args.user_name,
                          notes=socket.gethostname(),
                          name=str(all_args.algorithm_name) + "_" +

@@ -1,17 +1,22 @@
 #!/bin/sh
-env="mujoco"
-scenario="HalfCheetah-v5"
-agent_conf="6x1"
-agent_obsk=0
+env="football"
+scenario="academy_3_vs_1_with_keeper"
+# academy_pass_and_shoot_with_keeper n_agent=3
+# academy_3_vs_1_with_keeper n_agent=4
+# academy_counterattack_easy n_agent=11
+# 11_vs_11_easy_stochastic n_agent=11
+n_agent=4
 algo="happo"
-exp="mlp"
+exp="single"
+seed=0
 running_max=20
 kl_threshold=1e-4
 echo "env is ${env}, scenario is ${scenario}, algo is ${algo}, exp is ${exp}, max seed is ${seed_max}"
 for number in `seq ${running_max}`;
 do
     echo "the ${number}-th running:"
-    CUDA_VISIBLE_DEVICES=1 python train/train_mujoco.py \
+    CUDA_VISIBLE_DEVICES=0 apptainer exec --nv /home/shahils/gfootball_apptainer/gfootball.sif \
+    python3 train/train_football.py \
         --env_name ${env} \
         --algorithm_name ${algo} \
         --experiment_name ${exp} \
@@ -36,7 +41,7 @@ do
         --add_center_xy \
         --use_state_agent\
         --share_policy \
-        --use_wandb True \
-        --wandb_name "xxx" \
-        --user_name "shahil-shaik7-clemson-university"
+        # --use_wandb True \
+        # --wandb_name "xxx" \
+        # --user_name "shahil-shaik7-clemson-university"
 done
