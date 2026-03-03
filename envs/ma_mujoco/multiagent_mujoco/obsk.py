@@ -71,6 +71,70 @@ def get_joints_at_kdist(agent_id, agent_partitions, hyperedges, k=0, kagents=Fal
     return k_dict
 
 
+# def build_obs(env, k_dict, k_categories, global_dict, global_categories, vec_len=None):
+#     """Given a k_dict from get_joints_at_kdist, extract observation vector.
+#
+#     :param k_dict: k_dict
+#     :param qpos: qpos numpy array
+#     :param qvel: qvel numpy array
+#     :param vec_len: if None no padding, else zero-pad to vec_len
+#     :return:
+#     observation vector
+#     """
+#
+#     # TODO: This needs to be fixed, it was designed for half-cheetah only!
+#     #if add_global_pos:
+#     #    obs_qpos_lst.append(global_qpos)
+#     #    obs_qvel_lst.append(global_qvel)
+#     body_set_dict = {}
+#     obs_lst = []
+#     # Add parts attributes
+#     for k in sorted(list(k_dict.keys())):
+#         cats = k_categories[k]
+#         for _t in k_dict[k]:
+#             for c in cats:
+#                 if c in _t.extra_obs:
+#                     items = _t.extra_obs[c](env).tolist()
+#                     obs_lst.extend(items if isinstance(items, list) else [items])
+#                 else:
+#                     if c in ["qvel","qpos"]: # this is a "joint position/velocity" item
+#                         items = getattr(env.sim.data, c)[getattr(_t, "{}_ids".format(c))]
+#                         obs_lst.extend(items if isinstance(items, list) else [items])
+#                     elif c in ["qfrc_actuator"]: # this is a "vel position" item
+#                         items = getattr(env.sim.data, c)[getattr(_t, "{}_ids".format("qvel"))]
+#                         obs_lst.extend(items if isinstance(items, list) else [items])
+#                     elif c in ["cvel", "cinert", "cfrc_ext"]:  # this is a "body position" item
+#                         if _t.bodies is not None:
+#                             for b in _t.bodies:
+#                                 if c not in body_set_dict:
+#                                     body_set_dict[c] = set()
+#                                 if b not in body_set_dict[c]:
+#                                     items = getattr(env.sim.data, c)[b].tolist()
+#                                     items = getattr(_t, "body_fn", lambda _id,x:x)(b, items)
+#                                     # obs_lst.extend(items if isinstance(items, list) else [items])
+#                                     body_set_dict[c].add(b)
+#
+#     # Add global attributes
+#     body_set_dict = {}
+#     for c in global_categories:
+#         if c in ["qvel", "qpos"]:  # this is a "joint position" item
+#             for j in global_dict.get("joints", []):
+#                 items = getattr(env.sim.data, c)[getattr(j, "{}_ids".format(c))]
+#                 obs_lst.extend(items if isinstance(items, list) else [items])
+#         else:
+#             for b in global_dict.get("bodies", []):
+#                 if c not in body_set_dict:
+#                     body_set_dict[c] = set()
+#                 if b not in body_set_dict[c]:
+#                     obs_lst.extend(getattr(env.sim.data, c)[b].tolist())
+#                     body_set_dict[c].add(b)
+#
+#     if vec_len is not None:
+#         pad = np.array((vec_len - len(obs_lst))*[0])
+#         if len(pad):
+#             return np.concatenate([np.array(obs_lst), pad])
+#     return np.array(obs_lst)
+
 def build_obs(env, k_dict, k_categories, global_dict, global_categories, vec_len=None):
     """Given a k_dict from get_joints_at_kdist, extract observation vector.
 
@@ -91,50 +155,90 @@ def build_obs(env, k_dict, k_categories, global_dict, global_categories, vec_len
     body_set_dict = {}
     obs_lst = []
     # Add parts attributes
+    # print("start=========================================================")
+    # print("k_categories: ", k_categories)
+    # print("k_dict: ", k_dict)
     for k in sorted(list(k_dict.keys())):
         cats = k_categories[k]
+        # print("cats: ", cats)
         for _t in k_dict[k]:
+            # print("_t: ", _t)
             for c in cats:
+                # print("c: ", c)
                 if c in _t.extra_obs:
                     items = _t.extra_obs[c](env).tolist()
+                    # print("extra_obs %s items: %s" % (c, items))
                     obs_lst.extend(items if isinstance(items, list) else [items])
-                else:
-                    if c in ["qvel","qpos"]: # this is a "joint position/velocity" item
-                        items = getattr(env.sim.data, c)[getattr(_t, "{}_ids".format(c))]
-                        obs_lst.extend(items if isinstance(items, list) else [items])
-                    elif c in ["qfrc_actuator"]: # this is a "vel position" item
-                        items = getattr(env.sim.data, c)[getattr(_t, "{}_ids".format("qvel"))]
-                        obs_lst.extend(items if isinstance(items, list) else [items])
-                    elif c in ["cvel", "cinert", "cfrc_ext"]:  # this is a "body position" item
-                        if _t.bodies is not None:
-                            for b in _t.bodies:
-                                if c not in body_set_dict:
-                                    body_set_dict[c] = set()
-                                if b not in body_set_dict[c]:
-                                    items = getattr(env.sim.data, c)[b].tolist()
-                                    items = getattr(_t, "body_fn", lambda _id,x:x)(b, items)
-                                    obs_lst.extend(items if isinstance(items, list) else [items])
-                                    body_set_dict[c].add(b)
+                elif c in ["qvel","qpos"]: # this is a "joint position/velocity" item
+                    items = getattr(env.unwrapped.data, c)[getattr(_t, "{}_ids".format(c))]    # added .unwrapped at 03/24/25
+                    # print("%s items: %s" % (c, items))
+                    obs_lst.extend(items if isinstance(items, list) else [items])
+                elif c in ["qfrc_actuator"]:  # this is a "vel position" item
+                    items = getattr(env.data, c)[getattr(_t, "{}_ids".format("qvel"))]
+                    # print("qfrc_actuator items: ", items)
+                    obs_lst.extend(items if isinstance(items, list) else [items])
+                elif c in ["cvel", "cinert", "cfrc_ext"]:  # this is a "body position" item
+                    if _t.bodies is not None:
+                        for b in _t.bodies:
+                            # print("b: ", b)
+                            if c not in body_set_dict:
+                                body_set_dict[c] = set()
+                            if b not in body_set_dict[c]:
+                                items = getattr(env.data, c)[b].tolist()
+                                items = getattr(_t, "body_fn", lambda _id,x:x)(b, items)
+                                # print("%s items: %s" % (c, items))
+                                # obs_lst.extend(items if isinstance(items, list) else [items])
+                                body_set_dict[c].add(b)
 
     # Add global attributes
     body_set_dict = {}
+    # print("global_categories: ", global_categories)
+    # print("global_dict: ", global_dict)
     for c in global_categories:
-        if c in ["qvel", "qpos"]:  # this is a "joint position" item
-            for j in global_dict.get("joints", []):
-                items = getattr(env.sim.data, c)[getattr(j, "{}_ids".format(c))]
+        # print("global c: ", c)
+        for j in global_dict.get("joints", []):
+            if c in j.extra_obs:
+                items = j.extra_obs[c](env).tolist()
+                # print("global extra_obs %s items: %s" % (c, items))
+                if c not in ["cfrc_ext"]:
+                    obs_lst.extend(items if isinstance(items, list) else [items])
+            elif c in ["qvel", "qpos"]:  # this is a "joint position" item
+                items = getattr(env.unwrapped.data, c)[getattr(j, "{}_ids".format(c))]   # added .unwrapped on 03/24/25
+                # print("global %s items: %s" % (c, items))
                 obs_lst.extend(items if isinstance(items, list) else [items])
-        else:
-            for b in global_dict.get("bodies", []):
-                if c not in body_set_dict:
-                    body_set_dict[c] = set()
-                if b not in body_set_dict[c]:
-                    obs_lst.extend(getattr(env.sim.data, c)[b].tolist())
-                    body_set_dict[c].add(b)
+            elif c in ["qfrc_actuator"]:  # this is a "vel position" item
+                items = getattr(env.data, c)[getattr(j, "{}_ids".format("qvel"))]
+                # print("global qfrc_actuator items: ", items)
+                obs_lst.extend(items if isinstance(items, list) else [items])
+            elif c in ["cvel", "cinert", "cfrc_ext"]:  # this is a "body position" item
+                if j.bodies is not None:
+                    for b in j.bodies:
+                        # print("global b: ", b)
+                        if c not in body_set_dict:
+                            body_set_dict[c] = set()
+                        if b not in body_set_dict[c]:
+                            items = getattr(env.data, c)[b].tolist()
+                            items = getattr(j, "body_fn", lambda _id,x:x)(b, items)
+                            # print("global %s items: %s" % (c, items))
+                            # obs_lst.extend(items if isinstance(items, list) else [items])
+                            body_set_dict[c].add(b)
+        for b in global_dict.get("bodies", []):
+            if c not in body_set_dict:
+                body_set_dict[c] = set()
+            if b not in body_set_dict[c]:
+                # print("global body items: ", getattr(env.sim.data, c)[b].tolist())
+                obs_lst.extend(getattr(env.data, c)[b].tolist())
+                body_set_dict[c].add(b)
 
     if vec_len is not None:
         pad = np.array((vec_len - len(obs_lst))*[0])
         if len(pad):
+            # print("len_pad: ", len(pad))
+            # print("obs_lst: ", obs_lst)
+            # print("end=========================================================")
             return np.concatenate([np.array(obs_lst), pad])
+    # print("obs_lst: ", obs_lst)
+    # print("end=========================================================")
     return np.array(obs_lst)
 
 
@@ -144,7 +248,7 @@ def build_actions(agent_partitions, k_dict):
     pass
 
 def get_parts_and_edges(label, partitioning):
-    if label in ["half_cheetah", "HalfCheetah-v2"]:
+    if label in ["half_cheetah", "HalfCheetah-v5"]:
 
         # define Mujoco graph
         bthigh = Node("bthigh", -6, -6, 0)
@@ -171,8 +275,6 @@ def get_parts_and_edges(label, partitioning):
                      (ffoot, fshin, fthigh)]
         elif partitioning == "6x1":
             parts = [(bfoot,), (bshin,), (bthigh,), (ffoot,), (fshin,), (fthigh,)]
-        elif partitioning == "3x2":
-            parts = [(bfoot, bshin,), (bthigh, ffoot,), (fshin, fthigh,)]
         else:
             raise Exception("UNKNOWN partitioning config: {}".format(partitioning))
 
@@ -211,9 +313,9 @@ def get_parts_and_edges(label, partitioning):
                  HyperEdge(hip4, hip1, hip2, hip3),
                  ]
 
-        free_joint = Node("free", 0, 0, -1, extra_obs={"qpos": lambda env: env.sim.data.qpos[:7],
-                                                       "qvel": lambda env: env.sim.data.qvel[:6],
-                                                       "cfrc_ext": lambda env: np.clip(env.sim.data.cfrc_ext[0:1], -1, 1)})
+        free_joint = Node("free", 0, 0, -1, extra_obs={"qpos": lambda env: env.data.qpos[:7],
+                                                       "qvel": lambda env: env.data.qvel[:6],
+                                                       "cfrc_ext": lambda env: np.clip(env.data.cfrc_ext[0:1], -1, 1)})
         globals = {"joints": [free_joint]}
 
         if partitioning == "2x4": # neighbouring legs together
@@ -241,19 +343,19 @@ def get_parts_and_edges(label, partitioning):
 
         # define Mujoco-Graph
         thigh_joint = Node("thigh_joint", -3, -3, 0,
-                           extra_obs={"qvel": lambda env: np.clip(np.array([env.sim.data.qvel[-3]]), -10, 10)})
+                           extra_obs={"qvel": lambda env: np.clip(np.array([env.data.qvel[-3]]), -10, 10)})
         leg_joint = Node("leg_joint", -2, -2, 1,
-                         extra_obs={"qvel": lambda env: np.clip(np.array([env.sim.data.qvel[-2]]), -10, 10)})
+                         extra_obs={"qvel": lambda env: np.clip(np.array([env.data.qvel[-2]]), -10, 10)})
         foot_joint = Node("foot_joint", -1, -1, 2,
-                          extra_obs={"qvel": lambda env: np.clip(np.array([env.sim.data.qvel[-1]]), -10, 10)})
+                          extra_obs={"qvel": lambda env: np.clip(np.array([env.data.qvel[-1]]), -10, 10)})
 
         edges = [HyperEdge(foot_joint, leg_joint),
                  HyperEdge(leg_joint, thigh_joint)]
 
         root_x = Node("root_x", 0, 0, -1, extra_obs={"qpos": lambda env: np.array([]),
-                                                     "qvel": lambda env: np.clip(np.array([env.sim.data.qvel[1]]), -10, 10)})
-        root_z = Node("root_z", 1, 1, -1, extra_obs={"qvel": lambda env: np.clip(np.array([env.sim.data.qvel[1]]), -10, 10)})
-        root_y = Node("root_y", 2, 2, -1, extra_obs={"qvel": lambda env: np.clip(np.array([env.sim.data.qvel[2]]), -10, 10)})
+                                                     "qvel": lambda env: np.clip(np.array([env.data.qvel[1]]), -10, 10)})
+        root_z = Node("root_z", 1, 1, -1, extra_obs={"qvel": lambda env: np.clip(np.array([env.data.qvel[1]]), -10, 10)})
+        root_y = Node("root_y", 2, 2, -1, extra_obs={"qvel": lambda env: np.clip(np.array([env.data.qvel[2]]), -10, 10)})
         globals = {"joints":[root_x, root_y, root_z]}
 
         if partitioning == "3x1":
@@ -330,13 +432,13 @@ def get_parts_and_edges(label, partitioning):
         fingertip = 3
         joint0 = Node("joint0", -4, -4, 0,
                       bodies=[body0, body1],
-                      extra_obs={"qpos":(lambda env:np.array([np.sin(env.sim.data.qpos[-4]),
-                                                              np.cos(env.sim.data.qpos[-4])]))})
+                      extra_obs={"qpos":(lambda env:np.array([np.sin(env.data.qpos[-4]),
+                                                              np.cos(env.data.qpos[-4])]))})
         joint1 = Node("joint1", -3, -3, 1,
                       bodies=[body1, fingertip],
                       extra_obs={"fingertip_dist":(lambda env:env.get_body_com("fingertip") - env.get_body_com("target")),
-                                 "qpos":(lambda env:np.array([np.sin(env.sim.data.qpos[-3]),
-                                                              np.cos(env.sim.data.qpos[-3])]))})
+                                 "qpos":(lambda env:np.array([np.sin(env.data.qpos[-3]),
+                                                              np.cos(env.data.qpos[-3])]))})
         edges = [HyperEdge(joint0, joint1)]
 
         worldbody = 0
@@ -402,10 +504,6 @@ def get_parts_and_edges(label, partitioning):
             # isolate upper and lower body
             parts = [(foot_joint,), (leg_joint,), (thigh_joint,),
                      (foot_left_joint,), (leg_left_joint,), (thigh_left_joint,)]
-        elif partitioning == "3x2":
-            # isolate upper and lower body
-            parts = [(foot_joint, leg_joint,), (thigh_joint, foot_left_joint,),
-                     (leg_left_joint, thigh_left_joint,)]
         else:
             raise Exception("UNKNOWN partitioning config: {}".format(partitioning))
 
@@ -418,9 +516,9 @@ def get_parts_and_edges(label, partitioning):
 
         bthigh = Node("bthigh", -6, -6, 0,
                      tendons=[tendon],
-                     extra_obs = {"ten_J": lambda env: env.sim.data.ten_J[tendon],
-                                  "ten_length": lambda env: env.sim.data.ten_length,
-                                  "ten_velocity": lambda env: env.sim.data.ten_velocity})
+                     extra_obs = {"ten_J": lambda env: env.data.ten_J[tendon],
+                                  "ten_length": lambda env: env.data.ten_length,
+                                  "ten_velocity": lambda env: env.data.ten_velocity})
         bshin = Node("bshin", -5, -5, 1)
         bfoot = Node("bfoot", -4, -4, 2)
         fthigh = Node("fthigh", -3, -3, 3)
@@ -429,9 +527,9 @@ def get_parts_and_edges(label, partitioning):
 
         bthigh2 = Node("bthigh2", -6, -6, 0,
                       tendons=[tendon],
-                      extra_obs={"ten_J": lambda env: env.sim.data.ten_J[tendon],
-                                 "ten_length": lambda env: env.sim.data.ten_length,
-                                 "ten_velocity": lambda env: env.sim.data.ten_velocity})
+                      extra_obs={"ten_J": lambda env: env.data.ten_J[tendon],
+                                 "ten_length": lambda env: env.data.ten_length,
+                                 "ten_velocity": lambda env: env.data.ten_velocity})
         bshin2 = Node("bshin2", -5, -5, 1)
         bfoot2 = Node("bfoot2", -4, -4, 2)
         fthigh2 = Node("fthigh2", -3, -3, 3)
@@ -549,9 +647,9 @@ def get_parts_and_edges(label, partitioning):
                            hip2n,
                            ankle2n])
 
-        free_joint = Node("free", 0, 0, -1, extra_obs={"qpos": lambda env: env.sim.data.qpos[:7],
-                                                       "qvel": lambda env: env.sim.data.qvel[:6],
-                                                       "cfrc_ext": lambda env: np.clip(env.sim.data.cfrc_ext[0:1], -1, 1)})
+        free_joint = Node("free", 0, 0, -1, extra_obs={"qpos": lambda env: env.data.qpos[:7],
+                                                       "qvel": lambda env: env.data.qvel[:6],
+                                                       "cfrc_ext": lambda env: np.clip(env.data.cfrc_ext[0:1], -1, 1)})
         globals = {"joints": [free_joint]}
 
         parts =  [[x for sublist in joints[i * n_segs_per_agents:(i + 1) * n_segs_per_agents] for x in sublist] for i in range(n_agents)]

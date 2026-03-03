@@ -11,15 +11,15 @@ echo "env is ${env}, scenario is ${scenario}, algo is ${algo}, exp is ${exp}, ma
 for number in `seq ${running_max}`;
 do
     echo "the ${number}-th running:"
-    CUDA_VISIBLE_DEVICES=1 python train/train_manygotogoal.py \
+    CUDA_VISIBLE_DEVICES=0 python train/train_manygotogoal.py \
         --env_name ${env} \
         --algorithm_name ${algo} \
         --experiment_name ${exp} \
         --scenario ${scenario} \
         --num_agents ${num_agents} \
         --agent_obsk ${agent_obsk} \
-        --lr 4e-5 \
-        --critic_lr 4e-5 \
+        --lr 4e-4 \
+        --critic_lr 4e-4 \
         --clip_param 0.2 \
         --std_x_coef 1 \
         --std_y_coef 5e-1 \

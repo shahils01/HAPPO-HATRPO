@@ -8,10 +8,10 @@ from runners.separated.base_runner import Runner
 def _t2n(x):
     return x.detach().cpu().numpy()
 
-class SMACRunner(Runner):
+class FootballRunner(Runner):
     """Runner class to perform training, evaluation. and data collection for SMAC. See parent class for details."""
     def __init__(self, config):
-        super(SMACRunner, self).__init__(config)
+        super(FootballRunner, self).__init__(config)
 
     def run(self):
         self.warmup()   
@@ -53,7 +53,7 @@ class SMACRunner(Runner):
             if episode % self.log_interval == 0:
                 end = time.time()
                 print("\n Map {} Algo {} Exp {} updates {}/{} episodes, total num timesteps {}/{}, FPS {}.\n"
-                        .format(self.all_args.map_name,
+                        .format(self.all_args.scenario,
                                 self.algorithm_name,
                                 self.experiment_name,
                                 episode,
@@ -154,14 +154,14 @@ class SMACRunner(Runner):
         active_masks[dones == True] = np.zeros(((dones == True).sum(), 1), dtype=np.float32)
         active_masks[dones_env == True] = np.ones(((dones_env == True).sum(), self.num_agents, 1), dtype=np.float32)
 
-        bad_masks = np.array([[[0.0] if info[agent_id]['bad_transition'] else [1.0] for agent_id in range(self.num_agents)] for info in infos])
+        # bad_masks = np.array([[[0.0] if info[agent_id]['bad_transition'] else [1.0] for agent_id in range(self.num_agents)] for info in infos])
         
         if not self.use_centralized_V:
             share_obs = obs
         for agent_id in range(self.num_agents):
             self.buffer[agent_id].insert(share_obs[:,agent_id], obs[:,agent_id], rnn_states[:,agent_id],
                     rnn_states_critic[:,agent_id],actions[:,agent_id], action_log_probs[:,agent_id],
-                    values[:,agent_id], rewards[:,agent_id], masks[:,agent_id], bad_masks[:,agent_id], 
+                    values[:,agent_id], rewards[:,agent_id], masks[:,agent_id], None, 
                     active_masks[:,agent_id], available_actions[:,agent_id])
 
     def log_train(self, train_infos, total_num_steps):
@@ -184,6 +184,9 @@ class SMACRunner(Runner):
         for eval_i in range(self.n_eval_rollout_threads):
             one_episode_rewards.append([])
             eval_episode_rewards.append([])
+
+        eval_episode_scores = []
+        one_episode_scores = [0 for _ in range(self.all_args.eval_episodes)]
 
         eval_obs, eval_share_obs, eval_available_actions = self.eval_envs.reset()
 
@@ -212,6 +215,9 @@ class SMACRunner(Runner):
             for eval_i in range(self.n_eval_rollout_threads):
                 one_episode_rewards[eval_i].append(eval_rewards[eval_i])
 
+            eval_scores = [t_info[0]["score_reward"] for t_info in eval_infos]
+            one_episode_scores += np.array(eval_scores)
+
             eval_dones_env = np.all(eval_dones, axis=1)
 
             eval_rnn_states[eval_dones_env == True] = np.zeros(((eval_dones_env == True).sum(), self.num_agents, self.recurrent_N, self.hidden_size), dtype=np.float32)
@@ -224,17 +230,18 @@ class SMACRunner(Runner):
                     eval_episode += 1
                     eval_episode_rewards[eval_i].append(np.sum(one_episode_rewards[eval_i], axis=0))
                     one_episode_rewards[eval_i] = []
-                    if eval_infos[eval_i][0]['won']:
-                        eval_battles_won += 1
+
+                    eval_episode_scores.append(one_episode_scores[eval_i])
+                    one_episode_scores[eval_i] = 0
 
             if eval_episode >= self.all_args.eval_episodes:
                 eval_episode_rewards = np.concatenate(eval_episode_rewards)
-                eval_env_infos = {'eval_average_episode_rewards': eval_episode_rewards}                
+                eval_env_infos = {'eval_average_episode_rewards': eval_episode_rewards,
+                                  'eval_max_episode_rewards': [np.max(eval_episode_rewards)]}
                 self.log_env(eval_env_infos, total_num_steps)
-                eval_win_rate = eval_battles_won/eval_episode
-                print("eval win rate is {}.".format(eval_win_rate))
+                print("eval_average_episode_rewards is {}.".format(np.mean(eval_episode_rewards)))
+
                 if self.use_wandb:
-                    wandb.log({"eval_win_rate": eval_win_rate}, step=total_num_steps)
-                else:
-                    self.writter.add_scalars("eval_win_rate", {"eval_win_rate": eval_win_rate}, total_num_steps)
+                        wandb.log({"eval_average_episode_rewards": np.mean(eval_episode_rewards)}, step=total_num_steps)
+                        wandb.log({"eval_average_episode_scores": np.mean(eval_episode_scores)}, step=total_num_steps)
                 break

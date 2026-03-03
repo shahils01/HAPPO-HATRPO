@@ -180,8 +180,8 @@ def get_config():
                         default=1, help="Number of parallel envs for rendering rollouts")
     parser.add_argument("--num_env_steps", type=int, 
                         default=10e6, help='Number of environment steps to train (default: 10e6)')
-    parser.add_argument("--user_name", type=str, 
-                        default='marl',help="[for wandb usage], to specify user's name for simply collecting training data.")
+    # parser.add_argument("--user_name", type=str, 
+    #                     default='marl',help="[for wandb usage], to specify user's name for simply collecting training data.")
     # env parameters
     parser.add_argument("--env_name", type=str, 
                         default='StarCraft2', help="specify the name of environment")
@@ -309,5 +309,8 @@ def get_config():
                         default=5, help="the number of episodes to render a given env")
     parser.add_argument("--ifi", type=float, 
                         default=0.1, help="the play interval of each rendered image in saved video.")
+
+    parser.add_argument("--user_name", type=str, default='xxx',help="[for wandb usage], to specify user's name for simply collecting training data.")
+    parser.add_argument("--use_wandb", type=bool, default=False, help="[for wandb usage], by default True, will log date to wandb server. or else will use tensorboard to log data.")
 
     return parser
