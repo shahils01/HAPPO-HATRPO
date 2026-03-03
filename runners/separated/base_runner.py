@@ -45,6 +45,7 @@ class Runner(object):
 
         # dir
         self.model_dir = self.all_args.model_dir
+        self.allow_partial_restore = bool(getattr(self.all_args, "allow_partial_restore", False))
 
         if self.use_render:
             import imageio
@@ -180,6 +181,27 @@ class Runner(object):
 
         return train_infos
 
+    def _load_state_dict_flexible(self, module, state_dict, module_name):
+        if not self.allow_partial_restore:
+            module.load_state_dict(state_dict)
+            return
+
+        module_state = module.state_dict()
+        matched = {}
+        skipped = []
+        for k, v in state_dict.items():
+            if k in module_state and module_state[k].shape == v.shape:
+                matched[k] = v
+            else:
+                skipped.append(k)
+
+        missing, unexpected = module.load_state_dict(matched, strict=False)
+        print(
+            f"[partial-restore] {module_name}: loaded {len(matched)}/{len(module_state)} params, "
+            f"checkpoint_keys={len(state_dict)}, skipped={len(skipped)}, "
+            f"missing={len(missing)}, unexpected={len(unexpected)}"
+        )
+
     def save(self):
         for agent_id in range(self.num_agents):
             if self.use_single_network:
@@ -194,13 +216,36 @@ class Runner(object):
     def restore(self):
         for agent_id in range(self.num_agents):
             if self.use_single_network:
-                policy_model_state_dict = torch.load(str(self.model_dir) + '/model_agent' + str(agent_id) + '.pt')
-                self.policy[agent_id].model.load_state_dict(policy_model_state_dict)
+                model_path = str(self.model_dir) + '/model_agent' + str(agent_id) + '.pt'
+                if not os.path.exists(model_path):
+                    raise FileNotFoundError(f"Missing checkpoint file: {model_path}")
+                policy_model_state_dict = torch.load(model_path, map_location=self.device)
+                self._load_state_dict_flexible(
+                    self.policy[agent_id].model,
+                    policy_model_state_dict,
+                    f"agent{agent_id}/model",
+                )
             else:
-                policy_actor_state_dict = torch.load(str(self.model_dir) + '/actor_agent' + str(agent_id) + '.pt')
-                self.policy[agent_id].actor.load_state_dict(policy_actor_state_dict)
-                policy_critic_state_dict = torch.load(str(self.model_dir) + '/critic_agent' + str(agent_id) + '.pt')
-                self.policy[agent_id].critic.load_state_dict(policy_critic_state_dict)
+                actor_path = str(self.model_dir) + '/actor_agent' + str(agent_id) + '.pt'
+                critic_path = str(self.model_dir) + '/critic_agent' + str(agent_id) + '.pt'
+                if not os.path.exists(actor_path):
+                    raise FileNotFoundError(f"Missing checkpoint file: {actor_path}")
+                if not os.path.exists(critic_path):
+                    raise FileNotFoundError(f"Missing checkpoint file: {critic_path}")
+
+                policy_actor_state_dict = torch.load(actor_path, map_location=self.device)
+                self._load_state_dict_flexible(
+                    self.policy[agent_id].actor,
+                    policy_actor_state_dict,
+                    f"agent{agent_id}/actor",
+                )
+
+                policy_critic_state_dict = torch.load(critic_path, map_location=self.device)
+                self._load_state_dict_flexible(
+                    self.policy[agent_id].critic,
+                    policy_critic_state_dict,
+                    f"agent{agent_id}/critic",
+                )
 
     def log_train(self, train_infos, total_num_steps): 
         for agent_id in range(self.num_agents):

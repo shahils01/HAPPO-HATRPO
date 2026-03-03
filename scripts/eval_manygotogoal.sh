@@ -21,6 +21,7 @@ python train/eval_manygotogoal.py \
  --faulty_node ${faulty_node} \
  --eval_faulty_node ${eval_faulty_node} \
  --model_dir "CHANGE_ME_MODEL_DIR" \
+ --allow_partial_restore \
  --eval_loops 100 \
  --eval_episodes 100 \
  --n_training_threads 32 \

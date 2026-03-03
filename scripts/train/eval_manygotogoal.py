@@ -49,6 +49,7 @@ def parse_args(args, parser):
     parser.add_argument('--faulty_node', type=int, default=-1)
     parser.add_argument('--eval_faulty_node', type=int, nargs='+', default=None)
     parser.add_argument('--eval_loops', type=int, default=100)
+    parser.add_argument('--allow_partial_restore', action='store_true', default=False)
     parser.add_argument('--add_center_xy', action='store_true', default=False)
     parser.add_argument('--use_state_agent', action='store_true', default=False)
     parser.add_argument('--use_single_network', action='store_true', default=False)
