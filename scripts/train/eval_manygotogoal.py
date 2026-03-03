@@ -51,6 +51,7 @@ def parse_args(args, parser):
     parser.add_argument('--eval_loops', type=int, default=100)
     parser.add_argument('--add_center_xy', action='store_true', default=False)
     parser.add_argument('--use_state_agent', action='store_true', default=False)
+    parser.add_argument('--use_single_network', action='store_true', default=False)
     return parser.parse_known_args(args)[0]
 
 
