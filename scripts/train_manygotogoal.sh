@@ -1,7 +1,7 @@
 #!/bin/sh
 env="mujoco"
 scenario="ManyAgentGoToGoalEnv-v0"
-num_agents=15
+num_agents=5
 agent_obsk=0
 algo="happo"
 exp="mlp"
